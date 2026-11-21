@@ -12,46 +12,38 @@ ENV CONTAINER_VERSION=1.3 \
     PUID=1000 \
     PGID=1000
 
-# Install temporary packages
+# Install Wine, set up the prefix and clean up in a single layer, so that
+# temporary packages, apt lists and the winetricks cache never reach the image.
 RUN apt-get update && \
-    apt-get install -y wget ca-certificates cabextract
-
-# Install Wine key and repository (signed-by keyring; apt-key is deprecated)
-RUN dpkg --add-architecture i386 && \
+    apt-get install -y wget ca-certificates cabextract && \
+    \
+    # Wine key and repository (signed-by keyring; apt-key is deprecated)
+    dpkg --add-architecture i386 && \
     mkdir -pm755 /etc/apt/keyrings && \
     wget -qO /etc/apt/keyrings/winehq.asc https://dl.winehq.org/wine-builds/winehq.key && \
     echo 'deb [arch=amd64,i386 signed-by=/etc/apt/keyrings/winehq.asc] https://dl.winehq.org/wine-builds/ubuntu/ noble main' \
         > /etc/apt/sources.list.d/winehq.list && \
-    apt-get update
-
-# Install Wine stable
-#RUN apt-get install -y --install-recommends winehq-stable
-# Install Wine staging
-RUN apt-get install -y --install-recommends winehq-staging
-
-# Download winetricks from source
-RUN wget https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks && \
-    chmod +x ./winetricks
-
-# Install X virtual frame buffer and winbind
-RUN apt-get install -y xvfb winbind
-
-# Configure wine prefix
-# WINEDLLOVERRIDES is required so wine doesn't ask any questions during setup
-RUN Xvfb :1 -screen 0 320x240x24 & \
+    apt-get update && \
+    \
+    # Wine staging, X virtual frame buffer, winbind, 32-bit Vulkan and GL
+    apt-get install -y --install-recommends winehq-staging && \
+    apt-get install -y xvfb winbind libvulkan1:i386 libgl1:i386 && \
+    \
+    # Configure the wine prefix
+    # WINEDLLOVERRIDES is required so wine doesn't ask any questions during setup
+    wget -qO /tmp/winetricks https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks && \
+    chmod +x /tmp/winetricks && \
+    (Xvfb :1 -screen 0 320x240x24 &) && \
     WINEDLLOVERRIDES="mscoree,mshtml=" wineboot -u && \
     wineserver -w && \
-    ./winetricks -q vcrun2012 winhttp
-
-#Install libvulkan and libgll
-RUN apt-get install -y libvulkan1:i386 && \
-    apt-get install -y libgl1:i386
-
-# Cleanup
-RUN apt-get remove -y wget cabextract && \
-    rm -rf /var/lib/apt/lists/* && \
-    rm winetricks && \
-    rm -rf .cache/
+    /tmp/winetricks -q vcrun2012 winhttp && \
+    wineserver -w && \
+    \
+    # Cleanup
+    apt-get remove -y wget cabextract && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /tmp/.X1-lock /root/.cache
 
 # Add the start script
 ADD start.sh .
