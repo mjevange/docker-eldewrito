@@ -1,6 +1,9 @@
 # Ubuntu 24.04, pinned by digest (Dependabot proposes updates)
 FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289
 
+# WineHQ staging version; bumped by the wine-watch workflow after a game test
+ARG WINE_VERSION=11.22~noble-1
+
 # Set environment variables
 ENV CONTAINER_VERSION=2.0 \
     ELDEWRITO_VERSION=0.7.1 \
@@ -28,7 +31,9 @@ RUN apt-get update && \
     # Wine staging without its desktop recommendations (GTK, printing, video,
     # databases, ...), plus only the libraries a headless server uses: TLS,
     # fonts, the X11 pieces winex11 needs on Xvfb, D-Bus, 32-bit Vulkan and GL
-    apt-get install -y --no-install-recommends winehq-staging && \
+    apt-get install -y --no-install-recommends \
+        winehq-staging="${WINE_VERSION}" wine-staging="${WINE_VERSION}" \
+        wine-staging-amd64="${WINE_VERSION}" wine-staging-i386:i386="${WINE_VERSION}" && \
     apt-get install -y --no-install-recommends xvfb xauth winbind \
         libgnutls30t64 libgnutls30t64:i386 libfreetype6 libfreetype6:i386 \
         libfontconfig1 libfontconfig1:i386 libdbus-1-3 libdbus-1-3:i386 \
