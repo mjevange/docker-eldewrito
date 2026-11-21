@@ -19,6 +19,9 @@ ENV ELDEWRITO_VERSION=0.7.1 \
     PUID=1000 \
     PGID=1000
 
+# Fail a RUN step if any command in a pipe fails (the checksum checks use pipes)
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Install Wine, set up the prefix and clean up in a single layer, so that
 # temporary packages, apt lists and the winetricks cache never reach the image.
 RUN apt-get update && \
