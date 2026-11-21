@@ -55,12 +55,13 @@ RUN apt-get update && \
 
 # Add the start script
 COPY start.sh /start.sh
+COPY healthcheck.sh /healthcheck.sh
 
 # Add the default configuration files
 COPY defaults /defaults
 
 # Make start script executable and create necessary directories
-RUN chmod +x /start.sh && \
+RUN chmod +x /start.sh /healthcheck.sh && \
     mkdir /config /logs
 
 # Set start command to execute the start script
@@ -75,8 +76,7 @@ EXPOSE 11774/udp 11775/tcp 11776/tcp 11777/tcp 11778/tcp
 # Set volumes
 VOLUME /game
 
-# Healthy when the server's info endpoint answers (bash /dev/tcp: no curl or
-# wget needed). Set HEALTHCHECK_PORT if Server.Port is not the default 11775.
+# Healthy when the server's info endpoint answers (see healthcheck.sh).
+# Set HEALTHCHECK_PORT if Server.Port is not the default 11775.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/${HEALTHCHECK_PORT:-11775} && \
-        printf "GET / HTTP/1.0\r\n\r\n" >&3 && timeout 5 head -c 15 <&3 | grep -q " 200"'
+    CMD ["/healthcheck.sh"]
