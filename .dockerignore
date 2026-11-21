@@ -1,2 +1,9 @@
+# Only start.sh and defaults/ are copied into the image; keep the build context small
+.git
+.github
+docs
+tests
+*.md
 docker-compose.yml
+docker-compose.yml.example*
 volumes/
