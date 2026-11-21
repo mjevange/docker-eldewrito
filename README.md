@@ -1,116 +1,161 @@
-<img src="http://i.imgur.com/IkTrjna.png" width="190" height="164" align="right"/>
+<img src="https://i.imgur.com/IkTrjna.png" width="190" height="164" align="right"/>
 
-# ElDewrito dedicated server dockerized
+# ElDewrito dedicated server for Docker
 
-> **Maintained fork of [DomiStyle/docker-eldewrito](https://github.com/DomiStyle/docker-eldewrito).**
-> All credit for the original container goes to DomiStyle; history is kept intact. Version 2.0 is a
-> drop-in replacement for `domistyle/eldewrito:v0.7.1-c1.3`: same game files, ports, volumes and
-> environment variables.
->
-> Changes in 2.0:
-> - Smaller image: Wine installed without desktop extras, built in a single layer, caches cleaned
-> - WineHQ repository set up with a signed-by keyring (`apt-key` is deprecated)
-> - Any non-root `PUID`/`PGID` works, including `PGID=100` (`users`) and `PUID=1000`
-> - Built-in health check on the info port
-> - Port 11778 (mod file server) is exposed
->
-> **Migrating from DomiStyle's image:** change only the image line, e.g.
-> `image: mjevange/eldewrito:v0.7.1-c2.0`, then `docker compose up -d`.
+Run an [ElDewrito](https://github.com/ElDewrito) 0.7.1 dedicated server on Linux. The container runs the
+Windows server under Wine with a virtual display, fully headless: no GUI for setup, running or configuration.
+The game files are not included; you provide your own copy.
 
-## About
+This is a maintained fork of [DomiStyle/docker-eldewrito](https://github.com/DomiStyle/docker-eldewrito).
+All credit for the original container goes to DomiStyle; its history is kept intact.
 
-This is a Dockerfile for running the ElDewrito server under Linux. The container uses Wine to run the Windows application and xvfb to create a virtual desktop.
+## Why this fork
 
-The container is running 100% headless - no GUI is required for installation, execution or configuration.
+Keep a small, useful image healthy for the long run:
 
-The game files are required in order to start this container. They are not bundled within the container and you will have to provide them.
+- **Drop-in.** Same game files, ports, volumes and variables as `domistyle/eldewrito`. Switching is one line.
+- **Reproducible.** The base image, Wine and winetricks are pinned and checksummed; updates arrive as reviewed changes.
+- **Tested.** Every change is built and tested. Wine updates are also tested against a real server before release.
+- **Kept current.** Released images are rebuilt weekly with the latest Ubuntu security updates.
+- **Explained.** Each design choice is written down in [docs/decisions](docs/decisions).
 
-## Usage
+## Quick start
 
-See [`docker-compose.yml.example`](docker-compose.yml.example) (recommended) or manually start the container with the following command:
+1. Put your ElDewrito 0.7.1 game files in a folder, e.g. `/opt/eldewrito`.
+2. Save this as `docker-compose.yml` (or start from [`docker-compose.yml.example`](docker-compose.yml.example)):
 
-```
-docker run -d -p 11774:11774/udp -p 11775:11775/tcp -p 11776:11776/tcp -p 11777:11777/tcp -p 11778:11778/tcp -v /opt/gamepath:/game --cap-add=SYS_PTRACE mjevange/eldewrito:v0.7.1-c2.0
-```
+   ```yaml
+   services:
+     eldewrito:
+       image: mjevange/eldewrito:0.7.1
+       restart: unless-stopped
+       cap_add: [SYS_PTRACE]   # required
+       init: true
+       ports:
+         - "11774:11774/udp"
+         - "11775:11775/tcp"
+         - "11777:11777/tcp"
+         - "11778:11778/tcp"
+       volumes:
+         - /opt/eldewrito:/game
+       environment:
+         SERVER_NAME: "My ElDewrito server"
+   ```
 
-For multiple instances take a look at [`docker-compose.yml.example_multiinstance`](docker-compose.yml.example_multiinstance).
+3. Run `docker compose up -d`. The server is up when <http://your-server:11775> answers and
+   `docker ps` shows the container as healthy.
 
-**The capability SYS_PTRACE is required due to how ElDewrito works. The server won't start without it.**
+On first start the container creates `data/dewrito_prefs.cfg` and voting files from
+[defaults](defaults) if they don't exist yet. Edit that file, or use the variables below.
 
-A [default configuration file](defaults/dewrito_prefs.cfg) and voting rules will be created automatically if no configuration exists in the game directory. If you do not want to use this configuration you can override this behavior by creating your own dewrito_prefs.cfg before starting the container.
+## Tags
 
-### Tags
+Images are published to Docker Hub (`mjevange/eldewrito`) and GitHub (`ghcr.io/mjevange/eldewrito`).
 
-The following tags are available:
+| Tag | Changes? | Use it for |
+|---|---|---|
+| `0.7.1` | yes | **Recommended.** Newest release for ElDewrito 0.7.1, with weekly security rebuilds |
+| `latest` | yes | Newest release for the newest ElDewrito version |
+| `v0.7.1-c2.1` | never | Exactly one release. Version = ElDewrito `0.7.1`, container `2.1` |
+| `v0.7.1-c2.1-20261201` | never | Exactly one weekly rebuild of that release |
+| `edge` | yes | Latest commit on master. For testing only |
 
-| Name       | Description |
-|------------|-------------|
-| `vG.G.G-cX.Y` | Pinned release: ElDewrito version `G.G.G`, container version `X.Y` (e.g. `v0.7.1-c2.0`). Recommended. |
-
-Pin a release tag: the image checks that the game files match its ElDewrito version.
-
-## Tutorial (for Ubuntu hosts)
-
-1. Prepare a Ubuntu host
-2. Install Docker for Ubuntu by following [this guide](https://docs.docker.com/install/linux/docker-ce/ubuntu/)
-3. Make sure Docker is working by running `docker -v`
-4. Grab [`docker-compose.yml.example`](docker-compose.yml.example) from this repository (or [`docker-compose.yml.example_multiinstance`](docker-compose.yml.example_multiinstance) for multiple instances)
-5. Put the file in a folder called `eldewrito` and rename it to `docker-compose.yml`
-6. Switch into the folder and open the file with `nano docker-compose.yml`
-7. Adjust the game path `/opt/eldewrito` if necessary
-8. Put your Eldewrito game files into the folder you specified for the volume at /game
-9. Run `docker compose up -d`
-
-You're done. Your container will now be running and you can check if it is working by visting http://server_ip:11775 in your browser.
-
-You can use `docker ps` to view running containers.
-
-To update the container either change the image tag inside of your docker-compose.yml and run `docker compose up -d` or use `docker compose pull` followed by `docker compose up -d` if you are using the latest tag.
-
-You can use `docker compose logs` to view the logs inside of the container.
+The image checks that your game files match its ElDewrito version, so pin a game-version tag
+rather than `latest` if you don't want to be moved to a new ElDewrito release.
 
 ## Configuration
 
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `PUID` | `1000` | User ID the server runs as (any non-root ID) |
+| `PGID` | `1000` | Group that owns the game files; also the server user's primary group (e.g. `100` for `users`) |
+| `RUN_AS_USER` | `1` | Unset it to run as root (then `PUID`/`PGID` must be `0`) |
+| `SKIP_CHOWN` | - | Set to `1` to skip fixing file ownership on start (faster, needs correct permissions) |
+| `SKIP_CHECKSUM_CHECK` | - | Set to `1` to skip the game version check (not recommended) |
+| `WAIT_ON_EXIT` | - | Set to `1` to keep the container running after the server stops (debugging) |
+| `WINE_DEBUG` | - | Set to `1` for verbose Wine output |
+| `HEALTHCHECK_PORT` | - | Port for the health check; normally read from `Server.Port` |
+
+**Server settings.** These optional variables write to `data/dewrito_prefs.cfg` on every start. Only variables
+you set are applied, so a hand-edited config stays untouched otherwise.
+
+| Variable | Setting |
+|---|---|
+| `SERVER_NAME` | `Server.Name` |
+| `SERVER_MESSAGE` | `Server.Message` |
+| `SERVER_PASSWORD` | `Server.Password` |
+| `SERVER_MAX_PLAYERS` | `Server.MaxPlayers` |
+| `SERVER_ANNOUNCE` | `Server.ShouldAnnounce` (`0` keeps the server off the public list) |
+| `HOST_NAME` | `Player.Name` |
+| `RCON_PASSWORD` | `Server.RconPassword` |
+| `SERVER_PORT`, `GAME_PORT`, `RCON_PORT`, `SIGNAL_SERVER_PORT`, `FILE_SERVER_PORT` | the matching `Server.*Port` / `Game.RconPort` |
+| `FILE_SERVER_ENABLED` | `Server.FileServerEnabled` |
+| `DEWRITO_PREFS` | Any other settings, one `Key=Value` per line (applied last) |
+
+For passwords, prefer `SERVER_PASSWORD_FILE` / `RCON_PASSWORD_FILE` pointing at a file (e.g. a
+[Docker secret](https://docs.docker.com/compose/how-tos/use-secrets/)): the value then stays out of
+`docker inspect` and is never logged. Values cannot contain double quotes.
+
 ### Ports
-| Port       | Protocol | Description |
-|------------|----------|-------------|
-| `11774` | UDP | Used for the game traffic |
-| `11775` | TCP | Runs the HTTP server used for communication with clients |
-| `11776` | TCP | Used for controlling the server via RCon |
-| `11777` | TCP | VoIP |
-| `11778` | TCP | File server clients download mods from |
+
+| Port | Protocol | Purpose |
+|---|---|---|
+| `11774` | UDP | Game traffic |
+| `11775` | TCP | Info server (server browser) |
+| `11776` | TCP | RCON (keep it on `127.0.0.1` unless you need remote admin) |
+| `11777` | TCP | VoIP / signal server |
+| `11778` | TCP | File server (mod downloads) |
+
+Publish ports 1:1. The server announces these numbers, so remapping them breaks joining.
 
 ### Volumes
 
-| Path       | Description | Required |
-|------------|-------------|----------|
-| `/game` | Has to be mounted with the ElDewrito game files in place. | Yes |
-| `/game/data` | Contains the dewrito_prefs.cfg and voting.json, automatically created if left empty on start. | No |
-| `/game/logs` | Contains the log files. | No |
-| `/game/mods` | Contains the mod files. | No |
-
-### Environment variables
-
-| Variable  | Description | Default  | Required |
-|-----------|-------------|----------|----------|
-| `PUID` | User ID the game server runs as (any non-root ID). | 1000 | No |
-| `PGID` | Group ID that owns the game files; also the server user's primary group (e.g. `100` for `users`). | 1000 | No |
-| `RUN_AS_USER` | Run as `PUID`/`PGID`. Unset it to run as root (then `PUID`/`PGID` must be 0). | 1 | No |
-| `SKIP_CHECKSUM_CHECK` | Set to true or 1 to disable the checksum check performed on container start. (not recommended) | - | No |
-| `SKIP_CHOWN` | Skips the chowning on container startup. Speeds up container startup but requires proper directory permissions. | - | No |
-| `WAIT_ON_EXIT` | Set to true or 1 to wait before the container exits. | - | No |
-| `WINE_DEBUG` | Set to true or 1 to get verbose output from Wine. | - | No |
-| `HEALTHCHECK_PORT` | Port the health check queries, if you changed `Server.Port`. | 11775 | No |
+| Path | Description |
+|---|---|
+| `/game` | **Required.** The ElDewrito game files. `data/` (config), `mods/` and `logs/` live inside it. |
 
 ### Health check
 
-The image reports healthy once the server's info endpoint (port 11775) answers, checked every 30 seconds after a
-120 second start period. Override or disable it with `healthcheck:` in your compose file.
+The container reports healthy once the info server answers, checked every 30 seconds after a 2-minute start
+period. It follows `Server.Port` automatically.
 
-## Building
+### Exit codes
 
+| Code | Meaning |
+|---|---|
+| `1` | `eldorado.exe` not found in `/game` |
+| `10` | Game files are not ElDewrito 0.7.1 (checksum mismatch) |
+| `20` / `30` | Invalid `PUID` / `PGID` |
+| `40` | `PUID`/`PGID` set while running as root |
+| `50` | A `*_FILE` variable points at a file that can't be read |
+| other | The server's own exit code |
+
+## Upgrading from `domistyle/eldewrito`
+
+Change only the image line, e.g. `image: mjevange/eldewrito:0.7.1`, and run `docker compose up -d`.
+Everything else stays the same. Since 2.0, `PUID=1000` and group IDs below 1000 (like `100`) work too.
+
+## Running several servers
+
+[`docker-compose.yml.example_multiinstance`](docker-compose.yml.example_multiinstance) runs two servers from
+one copy of the game files, each with its own config and logs, using the port variables above.
+
+## Building and testing
+
+```sh
+docker build -t eldewrito .                  # Podman: add --format docker to keep the health check
+tests/ci.sh eldewrito                        # no game files needed
+tests/game.sh eldewrito /path/to/game-copy   # starts the real server from a copy of your game files
 ```
-docker build -t eldewrito .
-```
 
-With Podman, add `--format docker`, otherwise the health check is dropped from the image.
+See [docs/testing.md](docs/testing.md) and the [changelog](CHANGELOG.md).
+
+## Credits and license
+
+- [DomiStyle](https://github.com/DomiStyle) created this container. This fork builds on that work.
+- The environment-variable settings were inspired by [thebeerkeg's fork](https://github.com/thebeerkeg/docker-eldewrito).
+- ElDewrito is a fan project and is not affiliated with Microsoft or Bungie.
+
+MIT licensed, see [LICENSE](LICENSE).
