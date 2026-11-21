@@ -38,7 +38,7 @@ if [ -z "${RUN_AS_USER}" ]; then
     echo "Running as root"
     user=root
 
-    if [ $PUID -ne 0 ] || [ $PGID -ne 0 ]; then
+    if [ "$PUID" -ne 0 ] || [ "$PGID" -ne 0 ]; then
         echo "${RED}Tried to set PUID OR PGID without setting RUN_AS_USER.${NC}"
         echo "${RED}Please set RUN_AS_USER or remove PUID & PGID from your environment variables.${NC}"
 
@@ -51,7 +51,7 @@ else
 
     # Any non-root ID is fine (e.g. PGID 100 for the "users" group)
     case "$PUID" in ''|*[!0-9]*) PUID=0 ;; esac
-    if [ $PUID -lt 1 ] || [ $PUID -gt 60000 ]; then
+    if [ "$PUID" -lt 1 ] || [ "$PUID" -gt 60000 ]; then
         echo "${RED}PUID is invalid${NC}"
 
         sleep 2
@@ -59,7 +59,7 @@ else
     fi
 
     case "$PGID" in ''|*[!0-9]*) PGID=0 ;; esac
-    if [ $PGID -lt 1 ] || [ $PGID -gt 60000 ]; then
+    if [ "$PGID" -lt 1 ] || [ "$PGID" -gt 60000 ]; then
         echo "${RED}PGID is invalid${NC}"
 
         sleep 2
@@ -68,19 +68,19 @@ else
 
     if ! id -u eldewrito > /dev/null 2>&1; then
         # Reuse a group that already has this GID, otherwise create one
-        if ! getent group $PGID > /dev/null; then
-            groupadd -g $PGID eldewrito
+        if ! getent group "$PGID" > /dev/null; then
+            groupadd -g "$PGID" eldewrito
         fi
 
         # The base image already has a user with UID 1000 (ubuntu): take it over
         # instead of failing, otherwise create the user
-        existing=$(getent passwd $PUID | cut -d: -f1)
+        existing=$(getent passwd "$PUID" | cut -d: -f1)
         if [ -n "$existing" ]; then
             echo "Reusing existing user $existing as eldewrito"
-            usermod -l eldewrito -g $PGID -G "" -d /tmp/home -m "$existing"
+            usermod -l eldewrito -g "$PGID" -G "" -d /tmp/home -m "$existing"
         else
             echo "Creating user"
-            useradd -u $PUID -g $PGID -m -d /tmp/home eldewrito
+            useradd -u "$PUID" -g "$PGID" -m -d /tmp/home eldewrito
         fi
     fi
 fi
@@ -111,7 +111,7 @@ fi
 
 if [ -z "${SKIP_CHOWN}" ]; then
     echo "Taking ownership of folders"
-    chown -R $PUID:$PGID /game /wine
+    chown -R "$PUID:$PGID" /game /wine
 
     echo "Changing folder permissions"
     find /game -type d -exec chmod 775 {} \;
