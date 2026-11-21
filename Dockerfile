@@ -6,6 +6,8 @@ ARG WINE_VERSION=11.22~noble-1
 # winetricks release and checksum of its script
 ARG WINETRICKS_VERSION=20260125
 ARG WINETRICKS_SHA256=431f82fc74000e6c864409f1d8fb495d696c03928808e3e8acffc45179312a7b
+# Checksum of the WineHQ repository signing key
+ARG WINEHQ_KEY_SHA256=d965d646defe94b3dfba6d5b4406900ac6c81065428bf9d9303ad7a72ee8d1b8
 
 # Set environment variables
 ENV CONTAINER_VERSION=2.0 \
@@ -27,6 +29,7 @@ RUN apt-get update && \
     dpkg --add-architecture i386 && \
     install -d -m 0755 /etc/apt/keyrings && \
     wget -qO /etc/apt/keyrings/winehq.asc https://dl.winehq.org/wine-builds/winehq.key && \
+    echo "${WINEHQ_KEY_SHA256}  /etc/apt/keyrings/winehq.asc" | sha256sum -c - && \
     echo 'deb [arch=amd64,i386 signed-by=/etc/apt/keyrings/winehq.asc] https://dl.winehq.org/wine-builds/ubuntu/ noble main' \
         > /etc/apt/sources.list.d/winehq.list && \
     apt-get update && \
