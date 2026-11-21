@@ -25,9 +25,17 @@ RUN apt-get update && \
         > /etc/apt/sources.list.d/winehq.list && \
     apt-get update && \
     \
-    # Wine staging, X virtual frame buffer, winbind, 32-bit Vulkan and GL
-    apt-get install -y --install-recommends winehq-staging && \
-    apt-get install -y xvfb winbind libvulkan1:i386 libgl1:i386 && \
+    # Wine staging without its desktop recommendations (GTK, printing, video,
+    # databases, ...), plus only the libraries a headless server uses: TLS,
+    # fonts, the X11 pieces winex11 needs on Xvfb, D-Bus, 32-bit Vulkan and GL
+    apt-get install -y --no-install-recommends winehq-staging && \
+    apt-get install -y --no-install-recommends xvfb xauth winbind \
+        libgnutls30t64 libgnutls30t64:i386 libfreetype6 libfreetype6:i386 \
+        libfontconfig1 libfontconfig1:i386 libdbus-1-3 libdbus-1-3:i386 \
+        libxcursor1 libxcursor1:i386 libxi6 libxi6:i386 libxrandr2 libxrandr2:i386 \
+        libxrender1 libxrender1:i386 libxfixes3 libxfixes3:i386 \
+        libxcomposite1 libxcomposite1:i386 libxinerama1 libxinerama1:i386 \
+        libxxf86vm1 libxxf86vm1:i386 libvulkan1:i386 libgl1:i386 && \
     \
     # Configure the wine prefix
     # WINEDLLOVERRIDES is required so wine doesn't ask any questions during setup
