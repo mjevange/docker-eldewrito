@@ -88,7 +88,7 @@ fi
 # Create a server directory if it doesn't exist
 if [ ! -d "data/server" ]; then
     echo "${YELLOW}Could not find an existing data/server directory. Creating one.${NC}"
-    mkdir data/server
+    mkdir -p data/server
 fi
 
 # Copy dewrito_prefs.cfg if it doesn't exist
