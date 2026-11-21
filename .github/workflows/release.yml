@@ -1,0 +1,159 @@
+name: Release
+
+# What gets published (always build -> tests/ci.sh -> push):
+#   push to master        -> edge
+#   tag v<ED>-c<X.Y>      -> v<ED>-c<X.Y>, v<ED>-c<X.Y>-<date>, <ED>, latest  (+ GitHub release)
+#   weekly / manual run   -> rebuild of the newest release tag with current Ubuntu updates:
+#                            v<ED>-c<X.Y>-<date>, <ED>, latest
+# Release tags (v0.7.1-c2.1) never move. Docker Hub is skipped until its secrets exist.
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/eldewrito
+  DOCKERHUB_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/eldewrito
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write    # GitHub release
+      packages: write    # GHCR
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Decide what to build
+        id: plan
+        env:
+          HAS_DOCKERHUB: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          date=$(date -u +%Y%m%d)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            mode=release; ref=$GITHUB_REF_NAME
+          elif [ "$GITHUB_EVENT_NAME" = push ]; then
+            mode=edge; ref=$GITHUB_SHA
+          else
+            # Our releases only: container version 2 and up (older tags are DomiStyle's history)
+            mode=rebuild; ref=$(git tag --list 'v*-c*' | grep -E -- '-c([2-9]|[1-9][0-9]+)\.[0-9]+$' | sort -V | tail -n 1 || true)
+            if [ -z "$ref" ]; then echo "No release tag yet, nothing to rebuild"; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          fi
+          git checkout --quiet "$ref"
+
+          ed=$(sed -n 's/^ENV ELDEWRITO_VERSION=\([0-9.]*\).*/\1/p' Dockerfile)
+          if [ "$mode" = edge ]; then
+            cver="edge-${GITHUB_SHA::7}"; tags="edge"
+          else
+            case "$ref" in v"$ed"-c*) ;; *) echo "Tag $ref does not match ElDewrito $ed"; exit 1 ;; esac
+            cver=${ref#v"$ed"-c}
+            tags="v$ed-c$cver-$date $ed latest"
+            [ "$mode" = release ] && tags="v$ed-c$cver $tags"
+          fi
+
+          registries="$GHCR_IMAGE"
+          [ "$HAS_DOCKERHUB" = true ] && registries="$registries $DOCKERHUB_IMAGE"
+          {
+            echo "skip=false"; echo "mode=$mode"; echo "ref=$ref"; echo "cver=$cver"
+            echo "revision=$(git rev-parse HEAD)"; echo "dockerhub=$HAS_DOCKERHUB"
+            echo "tags<<EOF"
+            for r in $registries; do for t in $tags; do echo "$r:$t"; done; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "mode=$mode ref=$ref version=$cver tags: $tags"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.plan.outputs.skip != 'true'
+
+      - name: Build for testing
+        if: steps.plan.outputs.skip != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          pull: true
+          no-cache: ${{ steps.plan.outputs.mode == 'rebuild' }}   # weekly: fresh Ubuntu updates
+          tags: eldewrito:candidate
+          build-args: CONTAINER_VERSION=${{ steps.plan.outputs.cver }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test
+        if: steps.plan.outputs.skip != 'true'
+        run: tests/ci.sh eldewrito:candidate
+
+      - name: Log in to GHCR
+        if: steps.plan.outputs.skip != 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: steps.plan.outputs.skip != 'true' && steps.plan.outputs.dockerhub == 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push
+        if: steps.plan.outputs.skip != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.plan.outputs.tags }}
+          build-args: CONTAINER_VERSION=${{ steps.plan.outputs.cver }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.plan.outputs.revision }}
+            org.opencontainers.image.version=${{ steps.plan.outputs.cver }}
+          cache-from: type=gha   # same layers as the tested build
+
+      - name: Update the Docker Hub page
+        if: steps.plan.outputs.skip != 'true' && steps.plan.outputs.dockerhub == 'true' && steps.plan.outputs.mode != 'rebuild'
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/eldewrito
+          short-description: Headless ElDewrito 0.7.1 dedicated server on Wine. Maintained, tested, rebuilt weekly.
+          readme-filepath: DOCKERHUB.md
+
+      - name: Create the GitHub release
+        if: steps.plan.outputs.mode == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.plan.outputs.ref }}
+        run: |
+          # Notes: the CHANGELOG section for this version, if there is one
+          awk -v v="${TAG}" 'index($0, "## [" v "]") == 1 {p = 1; next} /^## \[/ {p = 0} p' CHANGELOG.md > notes.md || true
+          [ -s notes.md ] || echo "See CHANGELOG.md." > notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md --verify-tag
+
+  # GitHub disables scheduled workflows after 60 days without repository activity
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in release.yml update-check.yml; do
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/enable"
+          done
