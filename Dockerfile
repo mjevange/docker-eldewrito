@@ -14,14 +14,14 @@ ENV CONTAINER_VERSION=1.3 \
 
 # Install temporary packages
 RUN apt-get update && \
-    apt-get install -y wget software-properties-common apt-transport-https cabextract
+    apt-get install -y wget ca-certificates cabextract
 
-# Install Wine key and repository
+# Install Wine key and repository (signed-by keyring; apt-key is deprecated)
 RUN dpkg --add-architecture i386 && \
-    wget -nc https://dl.winehq.org/wine-builds/winehq.key && \
-    apt-key add winehq.key && \
-    rm winehq.key && \
-    add-apt-repository 'deb https://dl.winehq.org/wine-builds/ubuntu/ noble main' && \
+    mkdir -pm755 /etc/apt/keyrings && \
+    wget -qO /etc/apt/keyrings/winehq.asc https://dl.winehq.org/wine-builds/winehq.key && \
+    echo 'deb [arch=amd64,i386 signed-by=/etc/apt/keyrings/winehq.asc] https://dl.winehq.org/wine-builds/ubuntu/ noble main' \
+        > /etc/apt/sources.list.d/winehq.list && \
     apt-get update
 
 # Install Wine stable
@@ -48,7 +48,7 @@ RUN apt-get install -y libvulkan1:i386 && \
     apt-get install -y libgl1:i386
 
 # Cleanup
-RUN apt-get remove -y wget software-properties-common apt-transport-https cabextract && \
+RUN apt-get remove -y wget cabextract && \
     rm -rf /var/lib/apt/lists/* && \
     rm winetricks && \
     rm -rf .cache/
