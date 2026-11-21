@@ -109,6 +109,83 @@ if [ ! -f "data/dewrito.json" ]; then
     cp /defaults/dewrito.json data/
 fi
 
+# Optional settings from environment variables. Only variables that are set
+# change dewrito_prefs.cfg; with none set the file is left untouched.
+PREFS="data/dewrito_prefs.cfg"
+
+# set_pref KEY VALUE: replace the line 'KEY "VALUE"' or append it if missing,
+# keeping the file's line endings (the game writes CRLF)
+set_pref() {
+    KEY="$1" VALUE="$2" awk '
+        BEGIN { key = ENVIRON["KEY"]; line = key " \"" ENVIRON["VALUE"] "\"" }
+        { cr = ($0 ~ /\r$/) ? "\r" : ""; if (cr != "") crlf = "\r" }
+        index($0, key " \"") == 1 { print line cr; done = 1; next }
+        { print }
+        END { if (!done) print line crlf }
+    ' "$PREFS" > "$PREFS.tmp" && cat "$PREFS.tmp" > "$PREFS" && rm -f "$PREFS.tmp"
+}
+
+# pref_from_env VAR KEY [secret]: set KEY from $VAR, or from the file named in $VAR_FILE
+pref_from_env() {
+    eval "value=\${$1-}"
+    eval "file=\${$1_FILE-}"
+    if [ -n "$file" ]; then
+        if [ ! -r "$file" ]; then
+            echo "${RED}$1_FILE is set but $file cannot be read${NC}"
+
+            sleep 2
+            exit 50
+        fi
+        value=$(cat "$file")
+    fi
+
+    [ -n "$value" ] || return 0
+    case "$value" in
+        *'"'*) echo "${YELLOW}Skipping $1: values cannot contain double quotes${NC}"; return 0 ;;
+    esac
+
+    set_pref "$2" "$value"
+    if [ -n "$3" ]; then
+        echo "Set $2 from $1 (value hidden)"
+    else
+        echo "Set $2 = $value"
+    fi
+}
+
+pref_from_env SERVER_NAME          Server.Name
+pref_from_env SERVER_MESSAGE       Server.Message
+pref_from_env SERVER_PASSWORD      Server.Password secret
+pref_from_env SERVER_MAX_PLAYERS   Server.MaxPlayers
+pref_from_env SERVER_ANNOUNCE      Server.ShouldAnnounce
+pref_from_env HOST_NAME            Player.Name
+pref_from_env RCON_PASSWORD        Server.RconPassword secret
+pref_from_env SERVER_PORT          Server.Port
+pref_from_env GAME_PORT            Server.GamePort
+pref_from_env RCON_PORT            Game.RconPort
+pref_from_env SIGNAL_SERVER_PORT   Server.SignalServerPort
+pref_from_env FILE_SERVER_PORT     Server.FileServerPort
+pref_from_env FILE_SERVER_ENABLED  Server.FileServerEnabled
+
+# Any other setting: DEWRITO_PREFS holds one Key=Value per line (applied last)
+if [ -n "${DEWRITO_PREFS-}" ]; then
+    printf '%s\n' "$DEWRITO_PREFS" | while IFS= read -r line; do
+        case "$line" in ''|'#'*) continue ;; *=*) ;; *)
+            echo "${YELLOW}Skipping DEWRITO_PREFS line without '=': $line${NC}"; continue ;;
+        esac
+        key=$(printf '%s' "${line%%=*}" | tr -d ' \t')
+        value=$(printf '%s' "${line#*=}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        case "$key" in
+            ''|*[!A-Za-z0-9._]*)
+                echo "${YELLOW}Skipping DEWRITO_PREFS line: $line${NC}"; continue ;;
+        esac
+        case "$value" in
+            *'"'*) echo "${YELLOW}Skipping $key: values cannot contain double quotes${NC}"; continue ;;
+        esac
+        set_pref "$key" "$value"
+        echo "Set $key (DEWRITO_PREFS)"
+    done
+fi
+
 if [ -z "${SKIP_CHOWN}" ]; then
     echo "Taking ownership of folders"
     chown -R "$PUID:$PGID" /game /wine
