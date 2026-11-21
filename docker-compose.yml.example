@@ -1,21 +1,30 @@
 services:
   eldewrito:
-    image: domistyle/eldewrito
+    # 0.7.1 = newest build for ElDewrito 0.7.1. Pin an exact tag (e.g. v0.7.1-c2.1) to control updates.
+    image: mjevange/eldewrito:0.7.1
     restart: unless-stopped
-    ports:
-      - 11774:11774/udp
-      - 11775:11775/tcp
-      - 11776:11776/tcp
-      - 11777:11777/tcp
-    volumes:
-      - /opt/eldewrito:/game
-      - mods:/game/mods
-      - data:/game/data
-      - logs:/game/logs
+    # Required: the server does not start without it
     cap_add:
       - SYS_PTRACE
-
-volumes:
-  data:
-  mods:
-  logs:
+    # Reaps the processes Wine leaves behind
+    init: true
+    # Publish ports 1:1: these numbers are announced to the master server
+    ports:
+      - "11774:11774/udp"   # game traffic
+      - "11775:11775/tcp"   # info server (server browser)
+      - "11777:11777/tcp"   # VoIP / signal server
+      - "11778:11778/tcp"   # file server (mod downloads)
+      # RCON: keep it local unless you need remote admin
+      - "127.0.0.1:11776:11776/tcp"
+    volumes:
+      # The ElDewrito 0.7.1 game files. data/, mods/ and logs/ live inside this folder.
+      - /opt/eldewrito:/game
+    environment:
+      PUID: "1000"   # user the server runs as
+      PGID: "1000"   # group that owns the game files
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
