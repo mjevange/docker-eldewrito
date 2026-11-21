@@ -10,8 +10,7 @@ ARG WINETRICKS_SHA256=431f82fc74000e6c864409f1d8fb495d696c03928808e3e8acffc45179
 ARG WINEHQ_KEY_SHA256=d965d646defe94b3dfba6d5b4406900ac6c81065428bf9d9303ad7a72ee8d1b8
 
 # Set environment variables
-ENV CONTAINER_VERSION=2.0 \
-    ELDEWRITO_VERSION=0.7.1 \
+ENV ELDEWRITO_VERSION=0.7.1 \
     MTNDEW_CHECKSUM=f1d6c49381ac1ec572f0f405e4cd406b \
     DISPLAY=:1 \
     WINEPREFIX="/wine" \
@@ -92,3 +91,15 @@ VOLUME /game
 # Set HEALTHCHECK_PORT if Server.Port is not the default 11775.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD ["/healthcheck.sh"]
+
+# Container version: set by CI from the git tag; "dev" for local builds.
+# Kept at the end so a version change does not rebuild the Wine layer.
+ARG CONTAINER_VERSION=dev
+ENV CONTAINER_VERSION=${CONTAINER_VERSION}
+
+LABEL org.opencontainers.image.title="ElDewrito dedicated server" \
+      org.opencontainers.image.description="Headless ElDewrito 0.7.1 dedicated server on Wine (maintained fork of DomiStyle/docker-eldewrito)" \
+      org.opencontainers.image.source="https://github.com/mjevange/docker-eldewrito" \
+      org.opencontainers.image.url="https://github.com/mjevange/docker-eldewrito" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${CONTAINER_VERSION}"
