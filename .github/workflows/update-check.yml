@@ -1,0 +1,102 @@
+name: Update check
+
+# Weekly: look for a newer Wine staging, winetricks release or Ubuntu 24.04 base image.
+# If there is one, bump the Dockerfile, build, run tests/ci.sh and open a pull request.
+# Merge only after tests/game.sh passed with real game files (a new Wine can break the server).
+on:
+  schedule:
+    - cron: "41 5 * * 1"   # Mondays 05:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Look for newer versions
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          arg() { sed -n "s/^ARG $1=\(.*\)/\1/p" Dockerfile; }
+          changes=""
+
+          # Wine staging (all four packages share one version)
+          wine_now=$(arg WINE_VERSION)
+          wine_new=$(curl -fsSL https://dl.winehq.org/wine-builds/ubuntu/dists/noble/main/binary-amd64/Packages |
+            awk '/^Package: winehq-staging$/ {p = 1} p && /^Version:/ {print $2; p = 0}' | sort -V | tail -n 1)
+          if [ -n "$wine_new" ] && [ "$wine_new" != "$wine_now" ]; then
+            sed -i "s/^ARG WINE_VERSION=.*/ARG WINE_VERSION=$wine_new/" Dockerfile
+            changes="$changes- Wine staging $wine_now → $wine_new"$'\n'
+          fi
+
+          # winetricks release (and the checksum of its script)
+          wt_now=$(arg WINETRICKS_VERSION)
+          wt_new=$(gh api repos/Winetricks/winetricks/releases/latest -q .tag_name)
+          if [ -n "$wt_new" ] && [ "$wt_new" != "$wt_now" ]; then
+            sum=$(curl -fsSL "https://raw.githubusercontent.com/Winetricks/winetricks/$wt_new/src/winetricks" | sha256sum | cut -d' ' -f1)
+            sed -i -e "s/^ARG WINETRICKS_VERSION=.*/ARG WINETRICKS_VERSION=$wt_new/" \
+                   -e "s/^ARG WINETRICKS_SHA256=.*/ARG WINETRICKS_SHA256=$sum/" Dockerfile
+            changes="$changes- winetricks $wt_now → $wt_new"$'\n'
+          fi
+
+          # Ubuntu 24.04 base image digest
+          token=$(curl -fsSL "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/ubuntu:pull" | jq -r .token)
+          base_new=$(curl -fsSI -H "Authorization: Bearer $token" \
+            -H "Accept: application/vnd.oci.image.index.v1+json" \
+            -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+            https://registry-1.docker.io/v2/library/ubuntu/manifests/24.04 | tr -d '\r' |
+            awk 'tolower($1) == "docker-content-digest:" {print $2}')
+          base_now=$(sed -n 's/^FROM ubuntu:24.04@\(sha256:[0-9a-f]*\).*/\1/p' Dockerfile)
+          if [ -n "$base_new" ] && [ "$base_new" != "$base_now" ]; then
+            sed -i "s/^FROM ubuntu:24.04@sha256:[0-9a-f]*/FROM ubuntu:24.04@$base_new/" Dockerfile
+            changes="$changes- Ubuntu 24.04 base image ${base_now:7:12} → ${base_new:7:12}"$'\n'
+          fi
+
+          printf '%s' "$changes"
+          {
+            echo "found=$([ -n "$changes" ] && echo true || echo false)"
+            echo "wine=$([ "$wine_new" != "$wine_now" ] && echo true || echo false)"
+            echo "changes<<EOF"; printf '%s' "$changes"; echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.check.outputs.found == 'true'
+
+      - name: Build with the new versions
+        if: steps.check.outputs.found == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: eldewrito:update
+          build-args: CONTAINER_VERSION=update-check
+          cache-from: type=gha
+
+      - name: Test
+        if: steps.check.outputs.found == 'true'
+        run: tests/ci.sh eldewrito:update
+
+      - name: Open a pull request
+        if: steps.check.outputs.found == 'true'
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
+        with:
+          branch: update/dependencies
+          delete-branch: true
+          add-paths: Dockerfile
+          author: Matt Evangelisti <mjevange@gmail.com>
+          committer: Matt Evangelisti <mjevange@gmail.com>
+          commit-message: Update pinned dependencies
+          title: Update pinned dependencies
+          body: |
+            ${{ steps.check.outputs.changes }}
+            The image builds and `tests/ci.sh` passes with these versions.
+            ${{ steps.check.outputs.wine == 'true' && 'Wine changed: run `tests/game.sh` with real game files before merging.' || 'No Wine change; safe to merge after a look.' }}
