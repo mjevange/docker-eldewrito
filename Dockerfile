@@ -15,11 +15,11 @@ ENV CONTAINER_VERSION=2.0 \
 # Install Wine, set up the prefix and clean up in a single layer, so that
 # temporary packages, apt lists and the winetricks cache never reach the image.
 RUN apt-get update && \
-    apt-get install -y wget ca-certificates cabextract && \
+    apt-get install -y --no-install-recommends wget ca-certificates cabextract && \
     \
     # Wine key and repository (signed-by keyring; apt-key is deprecated)
     dpkg --add-architecture i386 && \
-    mkdir -pm755 /etc/apt/keyrings && \
+    install -d -m 0755 /etc/apt/keyrings && \
     wget -qO /etc/apt/keyrings/winehq.asc https://dl.winehq.org/wine-builds/winehq.key && \
     echo 'deb [arch=amd64,i386 signed-by=/etc/apt/keyrings/winehq.asc] https://dl.winehq.org/wine-builds/ubuntu/ noble main' \
         > /etc/apt/sources.list.d/winehq.list && \
@@ -54,14 +54,14 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /tmp/* /tmp/.X1-lock /root/.cache
 
 # Add the start script
-ADD start.sh .
+COPY start.sh /start.sh
 
 # Add the default configuration files
-ADD defaults defaults
+COPY defaults /defaults
 
 # Make start script executable and create necessary directories
-RUN chmod +x start.sh && \
-    mkdir config logs
+RUN chmod +x /start.sh && \
+    mkdir /config /logs
 
 # Set start command to execute the start script
 CMD ["/start.sh"]
