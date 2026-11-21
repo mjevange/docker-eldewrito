@@ -70,7 +70,7 @@ CMD ["/start.sh"]
 WORKDIR /game
 
 # Expose necessary ports
-EXPOSE 11774/udp 11775/tcp 11776/tcp 11777/tcp
+EXPOSE 11774/udp 11775/tcp 11776/tcp 11777/tcp 11778/tcp
 
 # Set volumes
 VOLUME /game
