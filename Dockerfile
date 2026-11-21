@@ -3,6 +3,9 @@ FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451
 
 # WineHQ staging version; bumped by the wine-watch workflow after a game test
 ARG WINE_VERSION=11.22~noble-1
+# winetricks release and checksum of its script
+ARG WINETRICKS_VERSION=20260125
+ARG WINETRICKS_SHA256=431f82fc74000e6c864409f1d8fb495d696c03928808e3e8acffc45179312a7b
 
 # Set environment variables
 ENV CONTAINER_VERSION=2.0 \
@@ -44,7 +47,8 @@ RUN apt-get update && \
     \
     # Configure the wine prefix
     # WINEDLLOVERRIDES is required so wine doesn't ask any questions during setup
-    wget -qO /tmp/winetricks https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks && \
+    wget -qO /tmp/winetricks "https://raw.githubusercontent.com/Winetricks/winetricks/${WINETRICKS_VERSION}/src/winetricks" && \
+    echo "${WINETRICKS_SHA256}  /tmp/winetricks" | sha256sum -c - && \
     chmod +x /tmp/winetricks && \
     (Xvfb :1 -screen 0 320x240x24 &) && \
     WINEDLLOVERRIDES="mscoree,mshtml=" wineboot -u && \
