@@ -122,7 +122,7 @@ fi
 
 # Xvfb needs cleaning because it doesn't exit cleanly
 echo "Cleaning up"
-rm /tmp/.X1-lock
+rm -f /tmp/.X1-lock
 
 echo "Starting virtual frame buffer"
 Xvfb :1 -screen 0 320x240x24 &
