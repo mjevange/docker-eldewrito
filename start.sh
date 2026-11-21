@@ -49,14 +49,17 @@ else
     echo "Running as eldewrito"
     user=eldewrito
 
-    if [ $PUID -lt 1000 ] || [ $PUID -gt 60000 ]; then
+    # Any non-root ID is fine (e.g. PGID 100 for the "users" group)
+    case "$PUID" in ''|*[!0-9]*) PUID=0 ;; esac
+    if [ $PUID -lt 1 ] || [ $PUID -gt 60000 ]; then
         echo "${RED}PUID is invalid${NC}"
 
         sleep 2
         exit 20
     fi
 
-    if [ $PGID -lt 1000 ] || [ $PGID -gt 60000 ]; then
+    case "$PGID" in ''|*[!0-9]*) PGID=0 ;; esac
+    if [ $PGID -lt 1 ] || [ $PGID -gt 60000 ]; then
         echo "${RED}PGID is invalid${NC}"
 
         sleep 2
@@ -64,8 +67,21 @@ else
     fi
 
     if ! id -u eldewrito > /dev/null 2>&1; then
-        echo "Creating user"
-        useradd -u $PUID -m -d /tmp/home eldewrito
+        # Reuse a group that already has this GID, otherwise create one
+        if ! getent group $PGID > /dev/null; then
+            groupadd -g $PGID eldewrito
+        fi
+
+        # The base image already has a user with UID 1000 (ubuntu): take it over
+        # instead of failing, otherwise create the user
+        existing=$(getent passwd $PUID | cut -d: -f1)
+        if [ -n "$existing" ]; then
+            echo "Reusing existing user $existing as eldewrito"
+            usermod -l eldewrito -g $PGID -G "" -d /tmp/home -m "$existing"
+        else
+            echo "Creating user"
+            useradd -u $PUID -g $PGID -m -d /tmp/home eldewrito
+        fi
     fi
 fi
 
