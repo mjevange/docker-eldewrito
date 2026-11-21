@@ -1,42 +1,59 @@
-# This starts 2 dedicated server instances, sharing the game and mod files but with separate data and log folders
+# Two servers sharing one set of game files and mods, each with its own data
+# (config, voting) and logs. The second server's ports are set through
+# environment variables, so neither config needs editing by hand.
+
+x-eldewrito: &eldewrito
+  image: mjevange/eldewrito:0.7.1
+  restart: unless-stopped
+  cap_add:
+    - SYS_PTRACE
+  init: true
+  stop_grace_period: 30s
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
 
 services:
-  instance1:
-    image: domistyle/eldewrito
-    restart: unless-stopped
+  server1:
+    <<: *eldewrito
     ports:
-      - 11774:11774/udp
-      - 11775:11775/tcp
-      - 11776:11776/tcp
-      - 11777:11777/tcp
+      - "11774:11774/udp"
+      - "11775:11775/tcp"
+      - "11777:11777/tcp"
+      - "11778:11778/tcp"
+      - "127.0.0.1:11776:11776/tcp"
     volumes:
       - /opt/eldewrito:/game
-      - mods:/game/mods
-      - instance1-data:/game/data
-      - instance1-logs:/game/logs
-    cap_add:
-      - SYS_PTRACE
-  instance2:
-    image: domistyle/eldewrito
-    restart: unless-stopped
-    # Don't forget to manually update the dewrito_prefs.cfg for this instance with the ports
-    # The ports below are just examples
+      - server1-data:/game/data
+      - server1-logs:/game/logs
+    environment:
+      SERVER_NAME: "My server #1"
+
+  server2:
+    <<: *eldewrito
+    # Publish 1:1 and tell the server the same numbers
     ports:
-      - 11784:11784/udp
-      - 11785:11785/tcp
-      - 11786:11786/tcp
-      - 11787:11787/tcp
+      - "11784:11784/udp"
+      - "11785:11785/tcp"
+      - "11787:11787/tcp"
+      - "11788:11788/tcp"
+      - "127.0.0.1:11786:11786/tcp"
     volumes:
       - /opt/eldewrito:/game
-      - mods:/game/mods
-      - instance2-data:/game/data
-      - instance2-logs:/game/logs
-    cap_add:
-      - SYS_PTRACE
+      - server2-data:/game/data
+      - server2-logs:/game/logs
+    environment:
+      SERVER_NAME: "My server #2"
+      GAME_PORT: "11784"
+      SERVER_PORT: "11785"
+      RCON_PORT: "11786"
+      SIGNAL_SERVER_PORT: "11787"
+      FILE_SERVER_PORT: "11788"
 
 volumes:
-  instance1-data:
-  instance1-logs:
-  instance2-data:
-  instance2-logs:
-  mods:
+  server1-data:
+  server1-logs:
+  server2-data:
+  server2-logs:
