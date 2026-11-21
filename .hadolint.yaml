@@ -1,0 +1,5 @@
+# DL3008 (pin apt package versions): Ubuntu packages come from the digest-pinned
+# base image plus current security updates on each rebuild. Wine, the part that
+# can break the server, is pinned explicitly with WINE_VERSION.
+ignored:
+  - DL3008
