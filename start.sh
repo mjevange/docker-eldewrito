@@ -216,10 +216,12 @@ if [ ! -z "${WINE_DEBUG}" ]; then
     export WINEDEBUG=warn+all
 fi
 
-su -c "wine eldorado.exe -launcher -dedicated -window -height 200 -width 200 -minimized" $user
+su -c "wine eldorado.exe -launcher -dedicated -window -height 200 -width 200 -minimized" "$user"
+status=$?
 
 if [ -z "${WAIT_ON_EXIT}" ]; then
-    echo "${RED}Server terminated, exiting${NC}"
+    echo "${RED}Server terminated (exit code $status), exiting${NC}"
+    exit "$status"
 else
     echo "${RED}Server terminated, waiting${NC}"
     sleep infinity
