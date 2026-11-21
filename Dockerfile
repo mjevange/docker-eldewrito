@@ -1,5 +1,5 @@
-# Pull ubuntu image
-FROM ubuntu:24.04
+# Ubuntu 24.04, pinned by digest (Dependabot proposes updates)
+FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289
 
 # Set environment variables
 ENV CONTAINER_VERSION=2.0 \
